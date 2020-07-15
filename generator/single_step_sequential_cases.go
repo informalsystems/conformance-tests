@@ -201,7 +201,7 @@ func caseSingleSeqCommitOneThirdValsDontSign(valList ValList) {
 	)
 	testCase := makeTestCase(description, initial, input, expectedOutputError)
 
-	file := SINGLE_STEP_SEQ_PATH + "commit/one_third_vals_don't_sign.json"
+	file := SINGLE_STEP_SEQ_PATH + "commit/one_third_vals_dont_sign.json"
 	testCase.genJSON(file)
 }
 
