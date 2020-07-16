@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/informalsystems/conformance-tests/generator"
 	amino "github.com/tendermint/go-amino"
@@ -49,7 +50,17 @@ func TestVerify(t *testing.T) {
 			newSignedHeader := input.SignedHeader
 			newVals := input.ValidatorSet
 
-			e := lite.Verify(chainID, &trustedSignedHeader, &trustedNextVals, &newSignedHeader, &newVals, trustingPeriod, now, trustLevel)
+			e := lite.Verify(
+				chainID,
+				&trustedSignedHeader,
+				&trustedNextVals,
+				&newSignedHeader,
+				&newVals,
+				trustingPeriod,
+				now,
+				time.Second,
+				trustLevel,
+			)
 			err := e != nil
 			fmt.Printf("\n%s, \nError: %v \n", testCase.Description, e)
 			if (err && !expectsError) || (!err && expectsError) {
