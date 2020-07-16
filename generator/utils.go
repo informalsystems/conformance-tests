@@ -7,8 +7,6 @@ import (
 	"sort"
 	"time"
 
-	// amino "github.com/tendermint/go-amino"
-	// cryptoAmino "github.com/tendermint/tendermint/crypto/encoding/amino"
 	amino "github.com/tendermint/go-amino"
 	cryptoAmino "github.com/tendermint/tendermint/crypto/encoding/amino"
 	st "github.com/tendermint/tendermint/state"
@@ -202,7 +200,11 @@ func updateState(
 	// If so, removes it from privVals too
 	if len(privVals) > len(state.Validators.Validators) {
 		for i := 0; i < len(privVals); i++ {
-			_, val := state.Validators.GetByAddress(privVals[i].GetPubKey().Address())
+			pubKey, err := privVals[i].GetPubKey()
+			if err != nil {
+				fmt.Println(err)
+			}
+			_, val := state.Validators.GetByAddress(pubKey.Address())
 			if val == nil {
 				// removing the privVal when no corresponding entry found in the validator set
 				privVals = append(privVals[:i], privVals[i+1:]...)
