@@ -70,7 +70,7 @@ func GenerateSingleStepSkippingCases(jsonValList string) {
 	// Header
 
 	caseSingleSkipHeaderOutOfTrustingPeriod(valList)
-
+	caseSingleSkipHeaderFromFuture(valList)
 }
 
 func GenerateManyHeaderBisectionCases(jsonValList string) {

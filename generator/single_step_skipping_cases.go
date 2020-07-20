@@ -179,3 +179,20 @@ func caseSingleSkipHeaderOutOfTrustingPeriod(valList ValList) {
 	file := SINGLE_STEP_SKIPPING_PATH + "header/out_of_trusting_period.json"
 	testCase.genJSON(file)
 }
+
+func caseSingleSkipHeaderFromFuture(valList ValList) {
+	description := "Case: Trusted height=1, fails at height=6 with error - header_from_future"
+
+	initial, input, _, _ := generateInitialAndInputSkipBlocks(
+		valList.Validators[:1],
+		valList.PrivVals[:1],
+		1,
+	)
+
+	initial.Now, _ = time.Parse(time.RFC3339, "2019-11-02T15:04:05Z")
+
+	testCase := makeTestCase(description, initial, input, expectedOutputError)
+
+	file := SINGLE_STEP_SKIPPING_PATH + "header/header_from_future.json"
+	testCase.genJSON(file)
+}
