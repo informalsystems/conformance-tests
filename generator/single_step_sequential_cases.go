@@ -240,19 +240,6 @@ func caseSingleSeqCommitNilVote(valList ValList) {
 	testCase.genJSON(file)
 }
 
-func caseSingleSeqCommitNoSignatures(valList ValList) {
-	description := "Case: one lite block, no signatures present in commit, expects error"
-	initial, input, _, _ := generateGeneralCase(
-		valList.Validators[:1],
-		valList.PrivVals[:1],
-	)
-	input[0].SignedHeader.Commit.Signatures = []types.CommitSig{}
-	testCase := makeTestCase(description, initial, input, expectedOutputError)
-
-	file := SINGLE_STEP_SEQ_PATH + "commit/no_signatures.json"
-	testCase.genJSON(file)
-}
-
 // VALIDATOR SET ---->
 
 func caseSingleSeqValidatorSetOf1(valList ValList) {

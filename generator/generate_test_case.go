@@ -35,7 +35,6 @@ func GenerateSingleStepSequentialCases(jsonValList string) {
 	caseSingleSeqCommitMoreThanTwoThirdsValsDidSign(valList) // not an error
 
 	caseSingleSeqCommitNilVote(valList)
-	caseSingleSeqCommitNoSignatures(valList)
 
 	// Header
 	caseSingleSeqHeaderWrongLastCommitHash(valList)
@@ -65,6 +64,8 @@ func GenerateSingleStepSkippingCases(jsonValList string) {
 
 	caseSingleSkipCommitOneThirdValsDontSign(valList)         // error
 	caseSingleSkipCommitMoreThanTwoThirdsValsDidSign(valList) // not an error
+	caseSingleSkipCommitNoSignatures(valList)
+	caseMoreSignaturesThanValidators(valList)
 
 	// Header
 

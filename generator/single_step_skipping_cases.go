@@ -2,6 +2,8 @@ package generator
 
 import (
 	"time"
+
+	"github.com/tendermint/tendermint/types"
 )
 
 const (
@@ -120,6 +122,43 @@ func caseSingleSkipCommitMoreThanTwoThirdsValsDidSign(valList ValList) {
 	testCase := makeTestCase(description, initial, input, expectedOutputNoError)
 
 	file := SINGLE_STEP_SKIPPING_PATH + "commit/more_than_two_third_vals_sign.json"
+	testCase.genJSON(file)
+}
+
+func caseSingleSkipCommitNoSignatures(valList ValList) {
+	description := "Case: one lite block, no signatures present in commit, expects error"
+	initial, input, _, _ := generateInitialAndInputSkipBlocks(
+		valList.Validators[:1],
+		valList.PrivVals[:1],
+		5,
+	)
+	input[0].SignedHeader.Commit.Signatures = []types.CommitSig{}
+	testCase := makeTestCase(description, initial, input, expectedOutputError)
+
+	file := SINGLE_STEP_SKIPPING_PATH + "commit/no_signatures.json"
+	testCase.genJSON(file)
+}
+
+func caseMoreSignaturesThanValidators(valList ValList) {
+	description := "Case: commit contains more signatures than number of validators in the set, expects error"
+	initial, input, _, _ := generateInitialAndInputSkipBlocks(
+		valList.Validators[:3],
+		valList.PrivVals[:3],
+		5,
+	)
+	last := len(input) - 1
+	signatures := input[last].SignedHeader.Commit.Signatures
+	extraSignature := types.NewCommitSigForBlock(
+		[]byte(str64byte),
+		valList.Validators[4].Address,
+		signatures[0].Timestamp,
+	)
+
+	input[last].SignedHeader.Commit.Signatures = append(signatures, extraSignature)
+
+	testCase := makeTestCase(description, initial, input, expectedOutputError)
+
+	file := SINGLE_STEP_SKIPPING_PATH + "commit/more_signatures_than_validators.json"
 	testCase.genJSON(file)
 }
 
