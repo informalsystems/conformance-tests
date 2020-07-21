@@ -123,6 +123,29 @@ func caseSingleSeqHeaderWrongNextValSetHash(valList ValList) {
 	testCase.genJSON(file)
 }
 
+func caseNonMonotonicBftTime(valList ValList) {
+	description := "Case: consecutive lite blocks with non-monotonic bft time, expects error"
+
+	initial, input, _, privVals := generateGeneralCase(
+		valList.Validators[:1],
+		valList.PrivVals[:1],
+	)
+
+	// break bft time
+	input[0].SignedHeader.Header.Time, _ = time.Parse(time.RFC3339, "2019-11-02T15:03:50Z")
+	input[0].SignedHeader.Commit.BlockID.Hash = input[0].SignedHeader.Header.Hash()
+
+	// re-sign the header with broken header time
+	vote := input[0].SignedHeader.Commit.GetVote(0)
+	privVals[0].SignVote(initial.SignedHeader.ChainID, vote)
+	input[0].SignedHeader.Commit.Signatures[0].Signature = vote.Signature
+
+	testCase := makeTestCase(description, initial, input, expectedOutputError)
+
+	file := SINGLE_STEP_SEQ_PATH + "header/non_monotonic_bft_time.json"
+	testCase.genJSON(file)
+}
+
 // COMMIT ----->
 
 func caseSingleSeqCommitWrongHeaderHash(valList ValList) {

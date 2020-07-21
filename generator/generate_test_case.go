@@ -44,6 +44,7 @@ func GenerateSingleStepSequentialCases(jsonValList string) {
 	caseSingleSeqHeaderWrongTimestamp(valList)
 	caseSingleSeqHeaderWrongValSetHash(valList)
 	caseSingleSeqHeaderWrongNextValSetHash(valList)
+	caseNonMonotonicBftTime(valList)
 
 }
 
