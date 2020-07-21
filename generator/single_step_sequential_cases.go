@@ -63,18 +63,30 @@ func caseSingleSeqHeaderWrongChainID(valList ValList) {
 	testCase.genJSON(file)
 }
 
-func caseSingleSeqHeaderWrongHeight(valList ValList) {
+func caseSingleSeqHeaderNonMonotonicHeight(valList ValList) {
 
-	description := "Case: one lite block, wrong height in header, with error"
+	description := "Case: one lite block, non-monotonic height in header, with error"
 
-	initial, input, _, _ := generateGeneralCase(
+	initial, input, _, privVals := generateGeneralCase(
 		valList.Validators[:1],
 		valList.PrivVals[:1],
 	)
-	input[0].SignedHeader.Header.Height++
+
+	// break header height
+	input[0].SignedHeader.Header.Height = 1
+
+	// update commit values for broken header height
+	input[0].SignedHeader.Commit.BlockID.Hash = input[0].SignedHeader.Header.Hash()
+	input[0].SignedHeader.Commit.Height = input[0].SignedHeader.Header.Height
+
+	// re-sign the header with broken header time
+	vote := input[0].SignedHeader.Commit.GetVote(0)
+	privVals[0].SignVote(initial.SignedHeader.ChainID, vote)
+	input[0].SignedHeader.Commit.Signatures[0].Signature = vote.Signature
+
 	testCase := makeTestCase(description, initial, input, expectedOutputError)
 
-	file := SINGLE_STEP_SEQ_PATH + "header/wrong_header_height.json"
+	file := SINGLE_STEP_SEQ_PATH + "header/non_monotonic_header_height.json"
 	testCase.genJSON(file)
 }
 
@@ -133,6 +145,8 @@ func caseNonMonotonicBftTime(valList ValList) {
 
 	// break bft time
 	input[0].SignedHeader.Header.Time, _ = time.Parse(time.RFC3339, "2019-11-02T15:03:50Z")
+
+	// update header hash in commit
 	input[0].SignedHeader.Commit.BlockID.Hash = input[0].SignedHeader.Header.Hash()
 
 	// re-sign the header with broken header time

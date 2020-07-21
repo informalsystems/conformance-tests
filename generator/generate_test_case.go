@@ -40,7 +40,7 @@ func GenerateSingleStepSequentialCases(jsonValList string) {
 	caseSingleSeqHeaderWrongLastCommitHash(valList)
 	caseSingleSeqHeaderWrongLastBlockID(valList)
 	caseSingleSeqHeaderWrongChainID(valList)
-	caseSingleSeqHeaderWrongHeight(valList)
+	caseSingleSeqHeaderNonMonotonicHeight(valList)
 	caseSingleSeqHeaderWrongTimestamp(valList)
 	caseSingleSeqHeaderWrongValSetHash(valList)
 	caseSingleSeqHeaderWrongNextValSetHash(valList)
