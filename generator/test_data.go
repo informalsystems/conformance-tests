@@ -11,6 +11,7 @@ import (
 
 	"github.com/cometbft/cometbft/libs/json"
 	"github.com/cometbft/cometbft/light/provider"
+	lightmock "github.com/cometbft/cometbft/light/provider/mock"
 	"github.com/cometbft/cometbft/types"
 )
 
@@ -35,7 +36,7 @@ const (
 type TestCase struct {
 	Description    string      `json:"description"`
 	Initial        Initial     `json:"initial"`
-	Input          []LiteBlock `json:"input"`
+	Input          []lightBlock `json:"input"`
 	ExpectedOutput string      `json:"expected_output"`
 }
 
@@ -43,20 +44,19 @@ type TestCase struct {
 // The ouput is saved under the specified file parameter
 // TODO: rename to - intoJSON
 func (tc TestCase) genJSON(file string) {
-
-	json.RegisterInterface((*types.Evidence)(nil), nil)
-
-	b, err := json.MarshalJSONIndent(tc, " ", "	")
+	b, err := json.MarshalIndent(tc, " ", "	")
 	if err != nil {
 		fmt.Printf("error: %v", err)
 	}
 
-	_ = ioutil.WriteFile(file, b, 0644)
-
+	err = ioutil.WriteFile(file, b, 0644)
+	if err != nil {
+		panic(err)
+	}
 }
 
 // makeTestCase copies over the given parameters to the TestCase struct and returns it
-func makeTestCase(description string, initial Initial, input []LiteBlock, expectedOutput string) TestCase {
+func makeTestCase(description string, initial Initial, input []lightBlock, expectedOutput string) TestCase {
 	return TestCase{
 		Description:    description,
 		Initial:        initial,
@@ -65,25 +65,25 @@ func makeTestCase(description string, initial Initial, input []LiteBlock, expect
 	}
 }
 
-// LiteBlock refers to the minimum data a lite client interacts with.
+// lightBlock refers to the minimum data a light client interacts with.
 // Essentially, it only requires a SignedHeader and Validator Set for current and next height
-type LiteBlock struct {
-	SignedHeader     types.SignedHeader `json:"signed_header"`
-	ValidatorSet     types.ValidatorSet `json:"validator_set"`
-	NextValidatorSet types.ValidatorSet `json:"next_validator_set"`
+type lightBlock struct {
+	SignedHeader     *types.SignedHeader `json:"signed_header"`
+	ValidatorSet     *types.ValidatorSet `json:"validator_set"`
+	NextValidatorSet *types.ValidatorSet `json:"next_validator_set"`
 }
 
 // Initial stores the data required by a test case to set the context
 // i.e. the initial state to begin the test from
 type Initial struct {
-	SignedHeader     types.SignedHeader `json:"signed_header"`
-	NextValidatorSet types.ValidatorSet `json:"next_validator_set"`
+	SignedHeader     *types.SignedHeader `json:"signed_header"`
+	NextValidatorSet *types.ValidatorSet `json:"next_validator_set"`
 	TrustingPeriod   time.Duration      `json:"trusting_period"`
 	Now              time.Time          `json:"now"`
 }
 
 // ValList stores a list of validators and privVals
-// It is populated from the lite-client/tests/json/val_list.json
+// It is populated from the light-client/tests/json/val_list.json
 // It used to have a predefined set of validators for mocking the test data
 type ValList struct {
 	Validators []*types.Validator            `json:"validators"`
@@ -94,7 +94,6 @@ type ValList struct {
 // ValList contains valSet pointer and privVal interface
 // So to avoid manipulating the original list, we better copy it!
 func (valList ValList) Copy() (vl ValList) {
-
 	for _, val := range valList.Validators {
 		copyVal := *val
 		vl.Validators = append(vl.Validators, &copyVal)
@@ -104,6 +103,7 @@ func (valList ValList) Copy() (vl ValList) {
 		copyPrivVal := privVal
 		vl.PrivVals = append(vl.PrivVals, copyPrivVal)
 	}
+
 	return
 }
 
@@ -114,10 +114,9 @@ func GetValList(file string) ValList {
 	data := ReadFile(file)
 	var valList ValList
 
-	json.RegisterInterface((*types.PrivValidator)(nil), nil)
-	json.RegisterConcrete(&types.MockPV{}, "tendermint/MockPV", nil)
+	json.RegisterType(types.MockPV{}, "tendermint/MockPV")
 
-	er := json.UnmarshalJSON(data, &valList)
+	er := json.Unmarshal(data, &valList)
 	if er != nil {
 		fmt.Printf("error: %v", er)
 	}
@@ -128,7 +127,6 @@ func GetValList(file string) ValList {
 // GenerateValList produces a val_list.json file which contains a list validators and privVals
 // of given number abd voting power
 func GenerateValList(numVals int, votingPower int64) {
-
 	valSet, newPrivVal := types.RandValidatorSet(numVals, votingPower)
 	sort.Sort(types.ValidatorsByAddress(valSet.Validators))
 	valList := &ValList{
@@ -136,10 +134,9 @@ func GenerateValList(numVals int, votingPower int64) {
 		PrivVals:   types.PrivValidatorsByAddress(newPrivVal),
 	}
 
-	json.RegisterInterface((*types.PrivValidator)(nil), nil)
-	json.RegisterConcrete(&types.MockPV{}, "tendermint/MockPV", nil)
+	json.RegisterType(types.MockPV{}, "tendermint/MockPV")
 
-	b, err := json.MarshalJSONIndent(valList, " ", "	")
+	b, err := json.MarshalIndent(valList, " ", "	")
 
 	if err != nil {
 		panic(err)
@@ -178,7 +175,7 @@ func newAbsentCommitSig(valAddr types.Address) types.CommitSig {
 type TestBisection struct {
 	Description        string              `json:"description"`
 	TrustOptions       TrustOptions        `json:"trust_options"`
-	Primary            MockProvider        `json:"primary"`
+	Primary            *lightmock.Mock     `json:"primary"`
 	Witnesses          []provider.Provider `json:"witnesses"`
 	HeightToVerify     int64               `json:"height_to_verify"`
 	Now                time.Time           `json:"now"`
@@ -189,7 +186,7 @@ type TestBisection struct {
 func (tb TestBisection) make(
 	desc string,
 	trustOpts TrustOptions,
-	primary MockProvider,
+	primary *lightmock.Mock,
 	witnesses []provider.Provider,
 	heightToVerify int64,
 	now time.Time,
@@ -209,16 +206,17 @@ func (tb TestBisection) make(
 }
 
 func (testBisection TestBisection) genJSON(file string) {
-	json.RegisterInterface((*types.Evidence)(nil), nil)
-	json.RegisterInterface((*provider.Provider)(nil), nil)
-	json.RegisterConcrete(MockProvider{}, "com.tendermint/MockProvider", nil)
+	json.RegisterType(lightmock.Mock{}, "com.tendermint/lightmock.Mock")
 
-	b, err := json.MarshalJSONIndent(testBisection, " ", "	")
+	b, err := json.MarshalIndent(testBisection, " ", "	")
 	if err != nil {
 		fmt.Printf("error: %v", err)
 	}
 
-	_ = ioutil.WriteFile(file, b, 0644)
+	err = ioutil.WriteFile(file, b, 0644)
+	if err != nil {
+		panic(err)
+	}
 }
 
 type TrustOptions struct {
@@ -243,51 +241,6 @@ func (t TrustOptions) make(
 		TrustLevel: trustLevel,
 	}
 
-}
-
-type MockProvider struct {
-	ChainId    string      `json:"chain_id"`
-	LiteBlocks []LiteBlock `json:"lite_blocks"`
-}
-
-func (mp MockProvider) New(chainID string, liteBlocks []LiteBlock) MockProvider {
-	return MockProvider{
-		ChainId:    chainID,
-		LiteBlocks: liteBlocks,
-	}
-}
-
-func (mp MockProvider) Copy() MockProvider {
-	return MockProvider{
-		ChainId:    mp.ChainId,
-		LiteBlocks: mp.LiteBlocks,
-	}
-}
-
-func (mp MockProvider) ChainID() string {
-	return mp.ChainId
-}
-
-func (mp MockProvider) SignedHeader(height int64) (*types.SignedHeader, error) {
-	fmt.Printf("\n sh -- req h: %v", height)
-	for _, lb := range mp.LiteBlocks {
-		if lb.SignedHeader.Header.Height == height {
-			return &lb.SignedHeader, nil
-		}
-	}
-	return nil, provider.ErrSignedHeaderNotFound
-}
-func (mp MockProvider) ValidatorSet(height int64) (*types.ValidatorSet, error) {
-	fmt.Printf("\n vs -- req h: %v", height)
-	// if lb.SignedHeader.Header.Height+1 == height {
-	// 		return &lb.NextValidatorSet, nil
-	// 	}
-	for _, lb := range mp.LiteBlocks {
-		if lb.SignedHeader.Header.Height == height {
-			return &lb.ValidatorSet, nil
-		}
-	}
-	return nil, provider.ErrValidatorSetNotFound
 }
 
 type ValSetChanges []ValList

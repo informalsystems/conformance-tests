@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"time"
 
-	lite "github.com/cometbft/cometbft/light"
+	"github.com/cometbft/cometbft/light"
 	st "github.com/cometbft/cometbft/state"
 
 	"github.com/cometbft/cometbft/light/provider"
+	lightmock "github.com/cometbft/cometbft/light/provider/mock"
 	"github.com/cometbft/cometbft/types"
 )
 
@@ -18,12 +19,13 @@ func generateNextBlocks(
 	lastCommit *types.Commit,
 	valSetChanges ValSetChanges,
 	blockTime time.Time,
-) ([]LiteBlock, []st.State, types.PrivValidatorsByAddress) {
-	var liteBlocks []LiteBlock
+) ([]lightBlock, []st.State, types.PrivValidatorsByAddress) {
+	var lightBlocks []lightBlock
 	var states []st.State
+
 	valSetChanges = append(valSetChanges, valSetChanges[len(valSetChanges)-1])
 	for i := 0; i < numOfBlocks; i++ {
-		liteblock, st, _ := generateNextBlockWithNextValsUpdate(
+		lightblock, st, _ := generateNextBlockWithNextValsUpdate(
 			state,
 			valSetChanges[i].PrivVals,
 			lastCommit,
@@ -31,18 +33,19 @@ func generateNextBlocks(
 			nil,
 			blockTime,
 		)
-		liteBlocks = append(liteBlocks, liteblock)
+		lightBlocks = append(lightBlocks, lightblock)
 		state = st
-		lastCommit = liteblock.SignedHeader.Commit
+		lastCommit = lightblock.SignedHeader.Commit
 		states = append(states, state)
 		blockTime = blockTime.Add(5 * time.Second)
 	}
-	return liteBlocks, states, privVals
+
+	return lightBlocks, states, privVals
 }
 
-func makeLiteblocks(
+func makeLightBlocks(
 	valSetChanges ValSetChanges,
-) ([]LiteBlock, []st.State, types.PrivValidatorsByAddress) {
+) (map[int64]*types.SignedHeader, map[int64]*types.ValidatorSet, []st.State, types.PrivValidatorsByAddress) {
 	signedHeader, state, _ := generateFirstBlockWithNextValsUpdate(
 		valSetChanges[0].Validators,
 		valSetChanges[0].PrivVals,
@@ -51,16 +54,16 @@ func makeLiteblocks(
 		firstBlockTime,
 	)
 
-	firstBlock := []LiteBlock{
+	firstBlock := []lightBlock{
 		{
 			SignedHeader:     signedHeader,
-			ValidatorSet:     *state.LastValidators,
-			NextValidatorSet: *state.Validators,
+			ValidatorSet:     state.LastValidators,
+			NextValidatorSet: state.Validators,
 		},
 	}
 	lastCommit := signedHeader.Commit
 	numOfBlocks := len(valSetChanges) - 1
-	liteBlocks, states, privVals := generateNextBlocks(
+	lightBlocks, states, privVals := generateNextBlocks(
 		numOfBlocks,
 		state,
 		valSetChanges[1].PrivVals,
@@ -68,12 +71,22 @@ func makeLiteblocks(
 		valSetChanges[1:],
 		thirdBlockTime,
 	)
-	liteBlocks = append(firstBlock, liteBlocks...)
+	lightBlocks = append(firstBlock, lightBlocks...)
 	stateSlice := []st.State{
 		state,
 	}
 	states = append(stateSlice, states...)
-	return liteBlocks, states, privVals
+
+	// signed headers
+	signedHeaders := make(map[int64]*types.SignedHeader, len(lightBlocks))
+	// valSets
+	valSets := make(map[int64]*types.ValidatorSet, len(lightBlocks))
+	for _, lb := range lightBlocks {
+		signedHeaders[lb.SignedHeader.Height] = lb.SignedHeader
+		valSets[lb.SignedHeader.Height] = lb.ValidatorSet
+	}
+
+	return signedHeaders, valSets, states, privVals
 }
 
 func generateMultiPeerBisectionCase(
@@ -88,8 +101,9 @@ func generateMultiPeerBisectionCase(
 		primaryValSetChanges,
 		expectedBisections)
 
-	liteBlocks, statesAlternative, privValsAlternative := makeLiteblocks(alternativeValSetChanges)
-	testBisection.Witnesses[0] = MockProvider{}.New(liteBlocks[0].SignedHeader.Header.ChainID, liteBlocks)
+	signedHeaders, valSets, statesAlternative, privValsAlternative := makeLightBlocks(alternativeValSetChanges)
+	chainID := signedHeaders[0].Header.ChainID
+	testBisection.Witnesses[0] = lightmock.New(chainID, signedHeaders, valSets)
 	testBisection.ExpectedOutput = expectOutput
 	return testBisection, statesPrimary, privValsPrimary, statesAlternative, privValsAlternative
 }
@@ -100,13 +114,14 @@ func generateGeneralBisectionCase(
 	expectedBisections int32,
 ) (TestBisection, []st.State, types.PrivValidatorsByAddress) {
 
-	liteBlocks, states, privVals := makeLiteblocks(valSetChanges)
-	primary := MockProvider{}.New(liteBlocks[0].SignedHeader.Header.ChainID, liteBlocks)
+	signedHeaders, valSets, states, privVals := makeLightBlocks(valSetChanges)
+	chainID := signedHeaders[0].Header.ChainID
+	primary := lightmock.New(chainID, signedHeaders, valSets)
 
 	var witnesses []provider.Provider
 	witnesses = append([]provider.Provider{}, primary)
 
-	trustOptions := TrustOptions{}.make(liteBlocks[0].SignedHeader, TRUSTING_PERIOD, lite.DefaultTrustLevel)
+	trustOptions := TrustOptions{}.make(*signedHeaders[0], TRUSTING_PERIOD, light.DefaultTrustLevel)
 	heightToVerify := int64(len(valSetChanges))
 
 	testBisection := TestBisection{}.make(
@@ -131,7 +146,7 @@ func generateFirstBlock(
 	vals []*types.Validator,
 	privVals types.PrivValidatorsByAddress,
 	now time.Time,
-) (types.SignedHeader, st.State, types.PrivValidatorsByAddress) {
+) (*types.SignedHeader, st.State, types.PrivValidatorsByAddress) {
 
 	valSet := types.NewValidatorSet(vals)
 	state := NewState("test-chain-01", valSet, valSet)
@@ -139,14 +154,14 @@ func generateFirstBlock(
 	return makeBlock(state, privVals, nil, now)
 }
 
-//TODO: Comment!
+// TODO: Comment!
 func generateFirstBlockWithNextValsUpdate(
 	vals []*types.Validator,
 	privVals types.PrivValidatorsByAddress,
 	nextVals []*types.Validator,
 	nextPrivVals types.PrivValidatorsByAddress,
 	now time.Time,
-) (types.SignedHeader, st.State, types.PrivValidatorsByAddress) {
+) (*types.SignedHeader, st.State, types.PrivValidatorsByAddress) {
 
 	valSet := types.NewValidatorSet(vals)
 	nextValSet := types.NewValidatorSet(nextVals)
@@ -160,20 +175,24 @@ func makeBlock(
 	privVals types.PrivValidatorsByAddress,
 	nextPrivVals types.PrivValidatorsByAddress,
 	now time.Time,
-) (types.SignedHeader, st.State, types.PrivValidatorsByAddress) {
+) (*types.SignedHeader, st.State, types.PrivValidatorsByAddress) {
 	txs := generateTxs()
 	evidences := generateEvidences()
 	lbh := state.LastBlockHeight + 1
 	proposer := state.Validators.Proposer.Address
 
 	// first block has a nil last commit
-	block, partSet := state.MakeBlock(lbh, txs, nil, evidences, proposer)
+	block := state.MakeBlock(lbh, txs, nil, evidences, proposer)
+	partSet, err := block.MakePartSet(types.BlockPartSizeBytes)
+	if err != nil {
+		panic(fmt.Sprintf("failed to make part set: %v", err))
+	}
 
 	commit := generateCommit(block.Header, partSet, state.Validators, privVals, state.ChainID, now)
 
 	state, privVals = updateState(state, commit.BlockID, privVals, nextPrivVals)
 
-	signedHeader := types.SignedHeader{
+	signedHeader := &types.SignedHeader{
 		Header: &block.Header,
 		Commit: commit,
 	}
@@ -182,8 +201,7 @@ func makeBlock(
 }
 
 // Builds the Initial struct with given parameters
-func generateInitial(signedHeader types.SignedHeader, nextValidatorSet types.ValidatorSet, trustingPeriod time.Duration, now time.Time) Initial {
-
+func generateInitial(signedHeader *types.SignedHeader, nextValidatorSet *types.ValidatorSet, trustingPeriod time.Duration, now time.Time) Initial {
 	return Initial{
 		SignedHeader:     signedHeader,
 		NextValidatorSet: nextValidatorSet,
@@ -194,27 +212,30 @@ func generateInitial(signedHeader types.SignedHeader, nextValidatorSet types.Val
 
 // This one generates a "next" block,
 // i.e. given the first block, this function can be used to build up successive blocks
-func generateNextBlock(state st.State, privVals types.PrivValidatorsByAddress, lastCommit *types.Commit, now time.Time) (LiteBlock, st.State, types.PrivValidatorsByAddress) {
-
+func generateNextBlock(state st.State, privVals types.PrivValidatorsByAddress, lastCommit *types.Commit, now time.Time) (lightBlock, st.State, types.PrivValidatorsByAddress) {
 	txs := generateTxs()
 	evidences := generateEvidences()
 	lbh := state.LastBlockHeight + 1
 	proposer := state.Validators.Proposer.Address
 
-	block, partSet := state.MakeBlock(lbh, txs, lastCommit, evidences, proposer)
+	block := state.MakeBlock(lbh, txs, lastCommit, evidences, proposer)
+	partSet, err := block.MakePartSet(types.BlockPartSizeBytes)
+	if err != nil {
+		panic(fmt.Sprintf("failed to make part set: %v", err))
+	}
 
 	commit := generateCommit(block.Header, partSet, state.Validators, privVals, state.ChainID, now)
-	liteBlock := LiteBlock{
-		SignedHeader: types.SignedHeader{
+	lightBlock := lightBlock{
+		SignedHeader: &types.SignedHeader{
 			Header: &block.Header,
 			Commit: commit,
 		},
-		ValidatorSet:     *state.Validators.Copy(),     // dereferencing pointer
-		NextValidatorSet: *state.NextValidators.Copy(), // dereferencing pointer
+		ValidatorSet:     state.Validators.Copy(),     // dereferencing pointer
+		NextValidatorSet: state.NextValidators.Copy(), // dereferencing pointer
 	}
 
 	state, _ = updateState(state, commit.BlockID, privVals, nil)
-	return liteBlock, state, privVals
+	return lightBlock, state, privVals
 
 }
 
@@ -229,7 +250,7 @@ func generateNextBlockWithNextValsUpdate(
 	newVals []*types.Validator,
 	newPrivVals types.PrivValidatorsByAddress,
 	now time.Time,
-) (LiteBlock, st.State, types.PrivValidatorsByAddress) {
+) (lightBlock, st.State, types.PrivValidatorsByAddress) {
 
 	state.NextValidators = types.NewValidatorSet(newVals)
 
@@ -240,35 +261,40 @@ func generateNextBlockWithNextValsUpdate(
 	lbh := state.LastBlockHeight + 1
 	proposer := state.Validators.Proposer.Address
 
-	block, partSet := state.MakeBlock(lbh, txs, lastCommit, evidences, proposer)
+	block := state.MakeBlock(lbh, txs, lastCommit, evidences, proposer)
+	partSet, err := block.MakePartSet(types.BlockPartSizeBytes)
+	if err != nil {
+		panic(fmt.Sprintf("failed to make part set: %v", err))
+	}
+
 	commit := generateCommit(block.Header, partSet, state.Validators, privVals, state.ChainID, now)
 
-	liteBlock := LiteBlock{
-		SignedHeader: types.SignedHeader{
+	lightBlock := lightBlock{
+		SignedHeader: &types.SignedHeader{
 			Header: &block.Header,
 			Commit: commit,
 		},
-		ValidatorSet:     *state.Validators.Copy(),     // dereferencing pointer
-		NextValidatorSet: *state.NextValidators.Copy(), // dereferencing pointer
+		ValidatorSet:     state.Validators.Copy(),     // dereferencing pointer
+		NextValidatorSet: state.NextValidators.Copy(), // dereferencing pointer
 	}
 	state, newPrivVals = updateState(state, commit.BlockID, privVals, newPrivVals)
 
-	return liteBlock, state, newPrivVals
+	return lightBlock, state, newPrivVals
 }
 
-// Builds a general case containing initial and one lite block in input
+// Builds a general case containing initial and one light block in input
 // TODO: change name to genInitialAndInput
 func generateGeneralCase(
 	vals []*types.Validator,
 	privVals types.PrivValidatorsByAddress,
-) (Initial, []LiteBlock, st.State, types.PrivValidatorsByAddress) {
+) (Initial, []lightBlock, st.State, types.PrivValidatorsByAddress) {
 
-	var input []LiteBlock
+	var input []lightBlock
 
 	signedHeader, state, privVals := generateFirstBlock(vals, privVals, firstBlockTime)
-	initial := generateInitial(signedHeader, *state.NextValidators, TRUSTING_PERIOD, now)
-	liteBlock, state, _ := generateNextBlock(state, privVals, signedHeader.Commit, secondBlockTime)
-	input = append(input, liteBlock)
+	initial := generateInitial(signedHeader, state.NextValidators, TRUSTING_PERIOD, now)
+	lightBlock, state, _ := generateNextBlock(state, privVals, signedHeader.Commit, secondBlockTime)
+	input = append(input, lightBlock)
 
 	return initial, input, state, privVals
 }
@@ -277,24 +303,24 @@ func generateInitialAndInputSkipBlocks(
 	vals []*types.Validator,
 	privVals types.PrivValidatorsByAddress,
 	numOfBlocksToSkip int,
-) (Initial, []LiteBlock, st.State, types.PrivValidatorsByAddress) {
-	var input []LiteBlock
+) (Initial, []lightBlock, st.State, types.PrivValidatorsByAddress) {
+	var input []lightBlock
 
 	signedHeader, state, privVals := generateFirstBlock(
 		vals,
 		privVals,
 		firstBlockTime,
 	)
-	initial := generateInitial(signedHeader, *state.NextValidators, TRUSTING_PERIOD, now)
+	initial := generateInitial(signedHeader, state.NextValidators, TRUSTING_PERIOD, now)
 
 	blockTime := secondBlockTime
 	for i := 0; i <= numOfBlocksToSkip; i++ {
-		liteBlock, s, _ := generateNextBlock(state, privVals, signedHeader.Commit, blockTime)
+		lightBlock, s, _ := generateNextBlock(state, privVals, signedHeader.Commit, blockTime)
 		blockTime = blockTime.Add(5 * time.Second)
 		state = s
 
 		if i == numOfBlocksToSkip {
-			input = append(input, liteBlock)
+			input = append(input, lightBlock)
 		}
 	}
 
@@ -302,7 +328,6 @@ func generateInitialAndInputSkipBlocks(
 }
 
 func generateAndMakeGeneralTestCase(description string, vals []*types.Validator, privVals types.PrivValidatorsByAddress, expectedOutput string) TestCase {
-
 	initial, input, _, _ := generateGeneralCase(vals, privVals)
 	return makeTestCase(description, initial, input, expectedOutput)
 }
@@ -321,23 +346,23 @@ func generateAndMakeNextValsUpdateTestCase(
 }
 
 // Builds a case where next validator set changes
-// makes initial, and input with 2 lite blocks
+// makes initial, and input with 2 light blocks
 func generateNextValsUpdateCase(
 	initialVals []*types.Validator,
 	initialPrivVals types.PrivValidatorsByAddress,
 	nextVals []*types.Validator,
 	nextPrivVals types.PrivValidatorsByAddress,
-) (Initial, []LiteBlock, st.State, types.PrivValidatorsByAddress) {
+) (Initial, []lightBlock, st.State, types.PrivValidatorsByAddress) {
 
-	var input []LiteBlock
+	var input []lightBlock
 
 	signedHeader, state, privVals := generateFirstBlock(initialVals, initialPrivVals, firstBlockTime)
-	initial := generateInitial(signedHeader, *state.NextValidators, TRUSTING_PERIOD, now)
+	initial := generateInitial(signedHeader, state.NextValidators, TRUSTING_PERIOD, now)
 
-	liteBlock, state, privVals := generateNextBlockWithNextValsUpdate(state, privVals, signedHeader.Commit, nextVals, nextPrivVals, secondBlockTime)
-	input = append(input, liteBlock)
-	liteBlock, state, _ = generateNextBlock(state, privVals, liteBlock.SignedHeader.Commit, thirdBlockTime)
-	input = append(input, liteBlock)
+	lightBlock, state, privVals := generateNextBlockWithNextValsUpdate(state, privVals, signedHeader.Commit, nextVals, nextPrivVals, secondBlockTime)
+	input = append(input, lightBlock)
+	lightBlock, state, _ = generateNextBlock(state, privVals, lightBlock.SignedHeader.Commit, thirdBlockTime)
+	input = append(input, lightBlock)
 
 	return initial, input, state, privVals
 }
@@ -357,17 +382,62 @@ func generateCommit(
 ) *types.Commit {
 	blockID := types.BlockID{
 		Hash: header.Hash(),
-		PartsHeader: types.PartSetHeader{
+		PartSetHeader: types.PartSetHeader{
 			Hash:  partSet.Hash(),
 			Total: partSet.Total(),
 		},
 	}
-	voteSet := types.NewVoteSet(chainID, header.Height, 1, types.SignedMsgType(byte(types.PrecommitType)), valSet)
 
-	commit, err := types.MakeCommit(blockID, header.Height, 1, voteSet, privVals, now)
+	commit, err := makeCommit(blockID, header.Height, 1, valSet, privVals, chainID, now)
 	if err != nil {
 		fmt.Println(err)
 	}
 
 	return commit
+}
+
+// copied from https://github.com/cometbft/cometbft/blob/809582f4f269090e51c30bd4e586a91eafea8522/internal/test/commit.go#L41-L84
+func makeCommit(blockID types.BlockID, height int64, round int32, valSet *types.ValidatorSet, privVals []types.PrivValidator, chainID string, now time.Time) (*types.Commit, error) {
+	sigs := make([]types.CommitSig, len(valSet.Validators))
+	for i := 0; i < len(valSet.Validators); i++ {
+		sigs[i] = types.NewCommitSigAbsent()
+	}
+
+	for _, privVal := range privVals {
+		pk, err := privVal.GetPubKey()
+		if err != nil {
+			return nil, err
+		}
+		addr := pk.Address()
+
+		idx, _ := valSet.GetByAddressMut(addr)
+		if idx < 0 {
+			return nil, fmt.Errorf("validator with address %s not in validator set", addr)
+		}
+
+		vote := &types.Vote{
+			ValidatorAddress: addr,
+			ValidatorIndex:   idx,
+			Height:           height,
+			Round:            round,
+			Type:             types.PrecommitType,
+			BlockID:          blockID,
+			Timestamp:        now,
+		}
+
+		v := vote.ToProto()
+
+		if err := privVal.SignVote(chainID, v, false); err != nil {
+			return nil, err
+		}
+
+		sigs[idx] = types.CommitSig{
+			BlockIDFlag:      types.BlockIDFlagCommit,
+			ValidatorAddress: addr,
+			Timestamp:        now,
+			Signature:        v.Signature,
+		}
+	}
+
+	return &types.Commit{Height: height, Round: round, BlockID: blockID, Signatures: sigs}, nil
 }

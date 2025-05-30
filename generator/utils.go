@@ -14,7 +14,6 @@ import (
 // by functions to create blocks for the "simulated" blockchain
 // It creates an INITIAL state with the given parameters
 func NewState(chainID string, valSet *types.ValidatorSet, nextValSet *types.ValidatorSet) st.State {
-
 	consensusParams := types.ConsensusParams{
 		Block:     types.DefaultBlockParams(),
 		Evidence:  types.DefaultEvidenceParams(),
