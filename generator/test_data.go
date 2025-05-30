@@ -6,13 +6,12 @@ import (
 	"sort"
 	"time"
 
-	amino "github.com/tendermint/go-amino"
-	cryptoAmino "github.com/tendermint/tendermint/crypto/encoding/amino"
-	tmbytes "github.com/tendermint/tendermint/libs/bytes"
-	tmmath "github.com/tendermint/tendermint/libs/math"
+	tmbytes "github.com/cometbft/cometbft/libs/bytes"
+	tmmath "github.com/cometbft/cometbft/libs/math"
 
-	"github.com/tendermint/tendermint/lite2/provider"
-	"github.com/tendermint/tendermint/types"
+	"github.com/cometbft/cometbft/libs/json"
+	"github.com/cometbft/cometbft/light/provider"
+	"github.com/cometbft/cometbft/types"
 )
 
 var (
@@ -45,11 +44,9 @@ type TestCase struct {
 // TODO: rename to - intoJSON
 func (tc TestCase) genJSON(file string) {
 
-	var cdc = amino.NewCodec()
-	cryptoAmino.RegisterAmino(cdc)
-	cdc.RegisterInterface((*types.Evidence)(nil), nil)
+	json.RegisterInterface((*types.Evidence)(nil), nil)
 
-	b, err := cdc.MarshalJSONIndent(tc, " ", "	")
+	b, err := json.MarshalJSONIndent(tc, " ", "	")
 	if err != nil {
 		fmt.Printf("error: %v", err)
 	}
@@ -117,12 +114,10 @@ func GetValList(file string) ValList {
 	data := ReadFile(file)
 	var valList ValList
 
-	var cdc = amino.NewCodec()
-	cryptoAmino.RegisterAmino(cdc)
-	cdc.RegisterInterface((*types.PrivValidator)(nil), nil)
-	cdc.RegisterConcrete(&types.MockPV{}, "tendermint/MockPV", nil)
+	json.RegisterInterface((*types.PrivValidator)(nil), nil)
+	json.RegisterConcrete(&types.MockPV{}, "tendermint/MockPV", nil)
 
-	er := cdc.UnmarshalJSON(data, &valList)
+	er := json.UnmarshalJSON(data, &valList)
 	if er != nil {
 		fmt.Printf("error: %v", er)
 	}
@@ -141,12 +136,10 @@ func GenerateValList(numVals int, votingPower int64) {
 		PrivVals:   types.PrivValidatorsByAddress(newPrivVal),
 	}
 
-	var cdc = amino.NewCodec()
-	cryptoAmino.RegisterAmino(cdc)
-	cdc.RegisterInterface((*types.PrivValidator)(nil), nil)
-	cdc.RegisterConcrete(&types.MockPV{}, "tendermint/MockPV", nil)
+	json.RegisterInterface((*types.PrivValidator)(nil), nil)
+	json.RegisterConcrete(&types.MockPV{}, "tendermint/MockPV", nil)
 
-	b, err := cdc.MarshalJSONIndent(valList, " ", "	")
+	b, err := json.MarshalJSONIndent(valList, " ", "	")
 
 	if err != nil {
 		panic(err)
@@ -216,13 +209,11 @@ func (tb TestBisection) make(
 }
 
 func (testBisection TestBisection) genJSON(file string) {
-	var cdc = amino.NewCodec()
-	cryptoAmino.RegisterAmino(cdc)
-	cdc.RegisterInterface((*types.Evidence)(nil), nil)
-	cdc.RegisterInterface((*provider.Provider)(nil), nil)
-	cdc.RegisterConcrete(MockProvider{}, "com.tendermint/MockProvider", nil)
+	json.RegisterInterface((*types.Evidence)(nil), nil)
+	json.RegisterInterface((*provider.Provider)(nil), nil)
+	json.RegisterConcrete(MockProvider{}, "com.tendermint/MockProvider", nil)
 
-	b, err := cdc.MarshalJSONIndent(testBisection, " ", "	")
+	b, err := json.MarshalJSONIndent(testBisection, " ", "	")
 	if err != nil {
 		fmt.Printf("error: %v", err)
 	}

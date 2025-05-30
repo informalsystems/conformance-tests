@@ -6,8 +6,8 @@ import (
 	"os"
 	"sort"
 
-	st "github.com/tendermint/tendermint/state"
-	"github.com/tendermint/tendermint/types"
+	st "github.com/cometbft/cometbft/state"
+	"github.com/cometbft/cometbft/types"
 )
 
 // NewState is used to initiate a state that will be used and manipulated

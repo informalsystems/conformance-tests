@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"time"
 
-	lite "github.com/tendermint/tendermint/lite2"
-	st "github.com/tendermint/tendermint/state"
+	lite "github.com/cometbft/cometbft/light"
+	st "github.com/cometbft/cometbft/state"
 
-	"github.com/tendermint/tendermint/lite2/provider"
-	"github.com/tendermint/tendermint/types"
+	"github.com/cometbft/cometbft/light/provider"
+	"github.com/cometbft/cometbft/types"
 )
 
 func generateNextBlocks(

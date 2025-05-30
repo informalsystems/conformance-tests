@@ -7,14 +7,13 @@ import (
 	"testing"
 	"time"
 
+	cmtjson "github.com/cometbft/cometbft/libs/json"
+	lite "github.com/cometbft/cometbft/light"
+	"github.com/cometbft/cometbft/light/provider"
 	"github.com/informalsystems/conformance-tests/generator"
-	amino "github.com/tendermint/go-amino"
-	cryptoAmino "github.com/tendermint/tendermint/crypto/encoding/amino"
-	lite "github.com/tendermint/tendermint/lite2"
-	"github.com/tendermint/tendermint/lite2/provider"
 
-	dbs "github.com/tendermint/tendermint/lite2/store/db"
-	dbm "github.com/tendermint/tm-db"
+	dbm "github.com/cometbft/cometbft-db"
+	dbs "github.com/cometbft/cometbft/light/store/db"
 )
 
 func TestVerify(t *testing.T) {
@@ -27,11 +26,8 @@ func TestVerify(t *testing.T) {
 	for _, test := range tests {
 		data := generator.ReadFile(test)
 
-		cdc := amino.NewCodec()
-		cryptoAmino.RegisterAmino(cdc)
-
 		var testCase generator.TestCase
-		err := cdc.UnmarshalJSON(data, &testCase)
+		err := cmtjson.UnmarshalJSON(data, &testCase)
 		if err != nil {
 			fmt.Printf("error: %v", err)
 		}
@@ -92,9 +88,6 @@ func TestBisection(t *testing.T) {
 		}
 
 		data := generator.ReadFile(test)
-
-		cdc := amino.NewCodec()
-		cryptoAmino.RegisterAmino(cdc)
 
 		cdc.RegisterInterface((*provider.Provider)(nil), nil)
 		cdc.RegisterConcrete(generator.MockProvider{}, "com.tendermint/MockProvider", nil)

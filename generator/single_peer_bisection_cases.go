@@ -3,7 +3,7 @@ package generator
 import (
 	"time"
 
-	"github.com/tendermint/tendermint/types"
+	"github.com/cometbft/cometbft/types"
 )
 
 const SINGLE_PEER_BISECTION_PATH = "./tests/json/bisection/single_peer/"
