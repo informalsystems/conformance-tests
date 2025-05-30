@@ -148,11 +148,12 @@ func caseMoreSignaturesThanValidators(valList ValList) {
 	)
 	last := len(input) - 1
 	signatures := input[last].SignedHeader.Commit.Signatures
-	extraSignature := types.NewCommitSigForBlock(
-		[]byte(str64byte),
-		valList.Validators[4].Address,
-		signatures[0].Timestamp,
-	)
+	extraSignature := types.CommitSig{
+		BlockIDFlag:      types.BlockIDFlagCommit,
+		Signature:        []byte(str64byte),
+		ValidatorAddress: valList.Validators[4].Address,
+		Timestamp:        signatures[0].Timestamp,
+	}
 
 	input[last].SignedHeader.Commit.Signatures = append(signatures, extraSignature)
 

@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,10 +10,10 @@ import (
 
 	cmtjson "github.com/cometbft/cometbft/libs/json"
 	lite "github.com/cometbft/cometbft/light"
-	"github.com/cometbft/cometbft/light/provider"
 	"github.com/informalsystems/conformance-tests/generator"
 
 	dbm "github.com/cometbft/cometbft-db"
+	"github.com/cometbft/cometbft/light/provider"
 	dbs "github.com/cometbft/cometbft/light/store/db"
 )
 
@@ -27,12 +28,12 @@ func TestVerify(t *testing.T) {
 		data := generator.ReadFile(test)
 
 		var testCase generator.TestCase
-		err := cmtjson.UnmarshalJSON(data, &testCase)
+		err := cmtjson.Unmarshal(data, &testCase)
 		if err != nil {
 			fmt.Printf("error: %v", err)
 		}
 
-		chainID := testCase.Initial.SignedHeader.Header.ChainID
+		// chainID := testCase.Initial.SignedHeader.Header.ChainID
 		trustedSignedHeader := testCase.Initial.SignedHeader
 		trustedNextVals := testCase.Initial.NextValidatorSet
 		trustingPeriod := testCase.Initial.TrustingPeriod
@@ -47,11 +48,10 @@ func TestVerify(t *testing.T) {
 			newVals := input.ValidatorSet
 
 			e := lite.Verify(
-				chainID,
-				&trustedSignedHeader,
-				&trustedNextVals,
-				&newSignedHeader,
-				&newVals,
+				trustedSignedHeader,
+				trustedNextVals,
+				newSignedHeader,
+				newVals,
 				trustingPeriod,
 				now,
 				time.Second,
@@ -78,7 +78,6 @@ func TestBisection(t *testing.T) {
 	}
 
 	for _, test := range tests {
-
 		// we skip this one for now because the current version (v0.33.6)
 		// does not panic on receiving conflicting commits from witnesses
 		skippedTest := "json/bisection/multi_peer/conflicting_valid_commits_from_one_of_the_witnesses.json"
@@ -89,11 +88,8 @@ func TestBisection(t *testing.T) {
 
 		data := generator.ReadFile(test)
 
-		cdc.RegisterInterface((*provider.Provider)(nil), nil)
-		cdc.RegisterConcrete(generator.MockProvider{}, "com.tendermint/MockProvider", nil)
-
 		var testBisection generator.TestBisection
-		e := cdc.UnmarshalJSON(data, &testBisection)
+		e := cmtjson.Unmarshal(data, &testBisection)
 		if e != nil {
 			fmt.Printf("error: %v", e)
 		}
@@ -109,12 +105,17 @@ func TestBisection(t *testing.T) {
 		}
 		trustLevel := testBisection.TrustOptions.TrustLevel
 		expectedOutput := testBisection.ExpectedOutput
+		witnessesAsProviders := make([]provider.Provider, 0, len(witnesses))
+		for _, w := range witnesses {
+			witnessesAsProviders = append(witnessesAsProviders, w)
+		}
 
 		client, e := lite.NewClient(
+			context.Background(),
 			testBisection.Primary.ChainID(),
 			trustOptions,
 			testBisection.Primary,
-			witnesses,
+			witnessesAsProviders,
 			trustedStore,
 			lite.SkippingVerification(trustLevel))
 		if e != nil {
@@ -122,7 +123,7 @@ func TestBisection(t *testing.T) {
 		}
 
 		height := testBisection.HeightToVerify
-		_, e = client.VerifyHeaderAtHeight(height, testBisection.Now)
+		_, e = client.VerifyLightBlockAtHeight(context.Background(), height, testBisection.Now)
 		// ---
 		fmt.Println(e)
 		// ---

@@ -64,8 +64,8 @@ func caseBisectionConflictingHeaders(valList ValList) {
 		valSetChanges,
 		2,
 	)
-	last := len(testBisection.Primary.LiteBlocks) - 1
-	testBisection.Primary.LiteBlocks[last].SignedHeader.Commit.Signatures[0] = types.CommitSig{
+	last := len(testBisection.Primary.LightBlocks) - 1
+	testBisection.Primary.LightBlocks[last].SignedHeader.Commit.Signatures[0] = types.CommitSig{
 		BlockIDFlag:      types.BlockIDFlagAbsent,
 		ValidatorAddress: nil,
 	}
@@ -78,15 +78,15 @@ func caseBisectionConflictingHeaders(valList ValList) {
 
 	state := states[len(states)-2]
 	state.Validators.IncrementProposerPriority(1)
-	lastCommit := testBisection2.Primary.LiteBlocks[last-1].SignedHeader.Commit
-	time := testBisection2.Primary.LiteBlocks[last-1].SignedHeader.Header.Time.Add(2 * time.Second)
+	lastCommit := testBisection2.Primary.LightBlocks[last-1].SignedHeader.Commit
+	time := testBisection2.Primary.LightBlocks[last-1].SignedHeader.Header.Time.Add(2 * time.Second)
+
 	liteBlock, _, _ := generateNextBlock(state, lastValSetChange.PrivVals, lastCommit, time)
 	liteBlock.SignedHeader.Commit.Signatures[1] = types.CommitSig{
 		BlockIDFlag:      types.BlockIDFlagAbsent,
 		ValidatorAddress: nil,
 	}
-
-	testBisection2.Primary.LiteBlocks[last] = liteBlock
+	testBisection2.Primary.LightBlocks[last].SignedHeader = liteBlock.SignedHeader
 	testBisection.Witnesses[0] = testBisection2.Primary
 
 	testBisection.HeightToVerify = 5
@@ -108,18 +108,18 @@ func caseBisectionMaliciousValidatorSet(valList ValList) {
 		expectedOutputError,
 	)
 
-	lastIndex := len(testBisection.Primary.LiteBlocks) - 2
+	lastIndex := len(testBisection.Primary.LightBlocks) - 2
 	state := states[lastIndex]
 	valSet := types.NewValidatorSet(valList.Validators[:2])
 	privVals = valList.PrivVals[:2]
 	state.Validators = valSet
 
-	lastCommit := testBisection.Primary.LiteBlocks[lastIndex].SignedHeader.Commit
+	lastCommit := testBisection.Primary.LightBlocks[lastIndex].SignedHeader.Commit
 	time := state.LastBlockTime.Add(5 * time.Second)
 
 	liteBlock, _, _ := generateNextBlock(state, privVals, lastCommit, time)
 
-	testBisection.Primary.LiteBlocks[lastIndex+1] = liteBlock
+	testBisection.Primary.LightBlocks[lastIndex+1].SignedHeader = liteBlock.SignedHeader
 
 	file := MULTI_PEER_BISECTION_PATH + "malicious_validator_set.json"
 	testBisection.genJSON(file)

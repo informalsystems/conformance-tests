@@ -81,7 +81,7 @@ func caseSingleSeqHeaderNonMonotonicHeight(valList ValList) {
 
 	// re-sign the header with broken header time
 	vote := input[0].SignedHeader.Commit.GetVote(0)
-	privVals[0].SignVote(initial.SignedHeader.ChainID, vote)
+	privVals[0].SignVote(initial.SignedHeader.ChainID, vote.ToProto(), false)
 	input[0].SignedHeader.Commit.Signatures[0].Signature = vote.Signature
 
 	testCase := makeTestCase(description, initial, input, expectedOutputError)
@@ -151,7 +151,7 @@ func caseNonMonotonicBftTime(valList ValList) {
 
 	// re-sign the header with broken header time
 	vote := input[0].SignedHeader.Commit.GetVote(0)
-	privVals[0].SignVote(initial.SignedHeader.ChainID, vote)
+	privVals[0].SignVote(initial.SignedHeader.ChainID, vote.ToProto(), false)
 	input[0].SignedHeader.Commit.Signatures[0].Signature = vote.Signature
 
 	testCase := makeTestCase(description, initial, input, expectedOutputError)
@@ -202,7 +202,7 @@ func caseSingleSeqCommitWrongVoteTimestamp(valList ValList) {
 	input[0].SignedHeader.Commit.Signatures[0].Timestamp = wrongTimestamp
 
 	vote := input[0].SignedHeader.Commit.GetVote(0)
-	privVals[0].SignVote(initial.SignedHeader.ChainID, vote)
+	privVals[0].SignVote(initial.SignedHeader.ChainID, vote.ToProto(), false)
 
 	input[0].SignedHeader.Commit.Signatures[0].Signature = vote.Signature
 
@@ -267,7 +267,7 @@ func caseSingleSeqCommitNilVote(valList ValList) {
 	input[0].SignedHeader.Commit.Signatures[0].BlockIDFlag = types.BlockIDFlagNil
 
 	vote := input[0].SignedHeader.Commit.GetVote(0)
-	privVals[0].SignVote(initial.SignedHeader.ChainID, vote)
+	privVals[0].SignVote(initial.SignedHeader.ChainID, vote.ToProto(), false)
 
 	input[0].SignedHeader.Commit.Signatures[0].Signature = vote.Signature
 
@@ -325,7 +325,7 @@ func caseSingleSeqValidatorSetEmpty(valList ValList) {
 		valList.Validators[:2],
 		valList.PrivVals[:2],
 	)
-	input[0].ValidatorSet = *types.NewValidatorSet(nil)
+	input[0].ValidatorSet = types.NewValidatorSet(nil)
 	testCase := makeTestCase(description, initial, input, expectedOutputError)
 
 	file := SINGLE_STEP_SEQ_PATH + "validator_set/empty_valset.json"
@@ -462,7 +462,7 @@ func caseSingleSeqValidatorSetChangesMoreThanTwoThirds(valList ValList) {
 
 func caseSingleSeqValidatorSetWrongValidatorSet(valList ValList) {
 
-	var input []LiteBlock
+	var input []lightBlock
 	description := "Case: one lite block, wrong validator set, expects error"
 
 	signedHeader, state, _ := generateFirstBlock(
@@ -470,7 +470,7 @@ func caseSingleSeqValidatorSetWrongValidatorSet(valList ValList) {
 		valList.PrivVals[:3],
 		firstBlockTime,
 	)
-	initial := generateInitial(signedHeader, *state.NextValidators, TRUSTING_PERIOD, now)
+	initial := generateInitial(signedHeader, state.NextValidators, TRUSTING_PERIOD, now)
 
 	wrongVals := valList.Validators[3:6]
 	wrongPrivVals := valList.PrivVals[3:6]
@@ -489,7 +489,7 @@ func caseSingleSeqValidatorSetWrongValidatorSet(valList ValList) {
 func caseSingleSeqValidatorSetFaultySigner(valList ValList) {
 
 	copiedValList := valList.Copy()
-	var input []LiteBlock
+	var input []lightBlock
 	description := "Case: one lite block, faulty signer (not present in validator set), expects error"
 
 	signedHeader, state, privVals := generateFirstBlock(
@@ -497,11 +497,11 @@ func caseSingleSeqValidatorSetFaultySigner(valList ValList) {
 		copiedValList.PrivVals[:4],
 		firstBlockTime,
 	)
-	initial := generateInitial(signedHeader, *state.NextValidators, TRUSTING_PERIOD, now)
+	initial := generateInitial(signedHeader, state.NextValidators, TRUSTING_PERIOD, now)
 
 	liteBlock, state, _ := generateNextBlock(state, privVals, initial.SignedHeader.Commit, secondBlockTime)
 
-	liteBlock.ValidatorSet = *types.NewValidatorSet(copiedValList.Validators[:3])
+	liteBlock.ValidatorSet = types.NewValidatorSet(copiedValList.Validators[:3])
 	liteBlock.SignedHeader.Header.ValidatorsHash = liteBlock.ValidatorSet.Hash()
 	liteBlock.SignedHeader.Commit.BlockID.Hash = liteBlock.SignedHeader.Header.Hash()
 	liteBlock.SignedHeader.Commit.Signatures = liteBlock.SignedHeader.Commit.Signatures[1:4]
@@ -518,7 +518,7 @@ func caseSingleSeqValidatorSetFaultySigner(valList ValList) {
 func caseSingleSeqValidatorSetWrongValidatorPower(valList ValList) {
 
 	copiedValList := valList.Copy()
-	var input []LiteBlock
+	var input []lightBlock
 	description := "Case: one lite block, changing a validator's power in validator set, expects error"
 
 	signedHeader, state, privVals := generateFirstBlock(
@@ -526,7 +526,7 @@ func caseSingleSeqValidatorSetWrongValidatorPower(valList ValList) {
 		copiedValList.PrivVals[:3],
 		firstBlockTime,
 	)
-	initial := generateInitial(signedHeader, *state.NextValidators, TRUSTING_PERIOD, now)
+	initial := generateInitial(signedHeader, state.NextValidators, TRUSTING_PERIOD, now)
 
 	state.Validators.Validators[0].VotingPower++
 	state.NextValidators = state.Validators

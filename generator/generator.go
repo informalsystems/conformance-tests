@@ -7,8 +7,6 @@ import (
 	"github.com/cometbft/cometbft/light"
 	st "github.com/cometbft/cometbft/state"
 
-	"github.com/cometbft/cometbft/light/provider"
-	lightmock "github.com/cometbft/cometbft/light/provider/mock"
 	"github.com/cometbft/cometbft/types"
 )
 
@@ -45,7 +43,7 @@ func generateNextBlocks(
 
 func makeLightBlocks(
 	valSetChanges ValSetChanges,
-) (map[int64]*types.SignedHeader, map[int64]*types.ValidatorSet, []st.State, types.PrivValidatorsByAddress) {
+) ([]lightBlock, []st.State, types.PrivValidatorsByAddress) {
 	signedHeader, state, _ := generateFirstBlockWithNextValsUpdate(
 		valSetChanges[0].Validators,
 		valSetChanges[0].PrivVals,
@@ -77,16 +75,7 @@ func makeLightBlocks(
 	}
 	states = append(stateSlice, states...)
 
-	// signed headers
-	signedHeaders := make(map[int64]*types.SignedHeader, len(lightBlocks))
-	// valSets
-	valSets := make(map[int64]*types.ValidatorSet, len(lightBlocks))
-	for _, lb := range lightBlocks {
-		signedHeaders[lb.SignedHeader.Height] = lb.SignedHeader
-		valSets[lb.SignedHeader.Height] = lb.ValidatorSet
-	}
-
-	return signedHeaders, valSets, states, privVals
+	return lightBlocks, states, privVals
 }
 
 func generateMultiPeerBisectionCase(
@@ -101,10 +90,11 @@ func generateMultiPeerBisectionCase(
 		primaryValSetChanges,
 		expectedBisections)
 
-	signedHeaders, valSets, statesAlternative, privValsAlternative := makeLightBlocks(alternativeValSetChanges)
-	chainID := signedHeaders[0].Header.ChainID
-	testBisection.Witnesses[0] = lightmock.New(chainID, signedHeaders, valSets)
+	lightBlocks, statesAlternative, privValsAlternative := makeLightBlocks(alternativeValSetChanges)
+	chainID := lightBlocks[1].SignedHeader.Header.ChainID
+	testBisection.Witnesses[0] = &MockProvider{ChainIDStr: chainID, LightBlocks: lightBlocks}
 	testBisection.ExpectedOutput = expectOutput
+
 	return testBisection, statesPrimary, privValsPrimary, statesAlternative, privValsAlternative
 }
 
@@ -114,14 +104,14 @@ func generateGeneralBisectionCase(
 	expectedBisections int32,
 ) (TestBisection, []st.State, types.PrivValidatorsByAddress) {
 
-	signedHeaders, valSets, states, privVals := makeLightBlocks(valSetChanges)
-	chainID := signedHeaders[0].Header.ChainID
-	primary := lightmock.New(chainID, signedHeaders, valSets)
+	lightBlocks, states, privVals := makeLightBlocks(valSetChanges)
+	chainID := lightBlocks[1].SignedHeader.Header.ChainID
+	primary := &MockProvider{ChainIDStr: chainID, LightBlocks: lightBlocks}
 
-	var witnesses []provider.Provider
-	witnesses = append([]provider.Provider{}, primary)
+	var witnesses []*MockProvider
+	witnesses = append(witnesses, primary)
 
-	trustOptions := TrustOptions{}.make(*signedHeaders[0], TRUSTING_PERIOD, light.DefaultTrustLevel)
+	trustOptions := TrustOptions{}.make(*lightBlocks[1].SignedHeader, TRUSTING_PERIOD, light.DefaultTrustLevel)
 	heightToVerify := int64(len(valSetChanges))
 
 	testBisection := TestBisection{}.make(
@@ -182,7 +172,7 @@ func makeBlock(
 	proposer := state.Validators.Proposer.Address
 
 	// first block has a nil last commit
-	block := state.MakeBlock(lbh, txs, nil, evidences, proposer)
+	block := state.MakeBlock(lbh, txs, &types.Commit{}, evidences, proposer)
 	partSet, err := block.MakePartSet(types.BlockPartSizeBytes)
 	if err != nil {
 		panic(fmt.Sprintf("failed to make part set: %v", err))

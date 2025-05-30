@@ -93,12 +93,12 @@ func caseBisectionNotEnoughCommits(valList ValList) {
 		3,
 	)
 
-	last := len(testBisection.Primary.LiteBlocks) - 1
-	testBisection.Primary.LiteBlocks[last].SignedHeader.Commit.Signatures[0] = newAbsentCommitSig(
-		testBisection.Primary.LiteBlocks[last].SignedHeader.Commit.Signatures[0].ValidatorAddress,
+	last := len(testBisection.Primary.LightBlocks) - 1
+	testBisection.Primary.LightBlocks[last].SignedHeader.Commit.Signatures[0] = newAbsentCommitSig(
+		testBisection.Primary.LightBlocks[last].SignedHeader.Commit.Signatures[0].ValidatorAddress,
 	)
-	testBisection.Primary.LiteBlocks[last].SignedHeader.Commit.Signatures[1] = newAbsentCommitSig(
-		testBisection.Primary.LiteBlocks[last].SignedHeader.Commit.Signatures[1].ValidatorAddress,
+	testBisection.Primary.LightBlocks[last].SignedHeader.Commit.Signatures[1] = newAbsentCommitSig(
+		testBisection.Primary.LightBlocks[last].SignedHeader.Commit.Signatures[1].ValidatorAddress,
 	)
 
 	testBisection.ExpectedOutput = expectedOutputError

@@ -1,8 +1,9 @@
 package generator
 
 import (
+	"context"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"sort"
 	"time"
 
@@ -10,8 +11,6 @@ import (
 	tmmath "github.com/cometbft/cometbft/libs/math"
 
 	"github.com/cometbft/cometbft/libs/json"
-	"github.com/cometbft/cometbft/light/provider"
-	lightmock "github.com/cometbft/cometbft/light/provider/mock"
 	"github.com/cometbft/cometbft/types"
 )
 
@@ -29,15 +28,21 @@ const (
 	expectedOutputError   = "error"
 )
 
+func init() {
+	// Register the MockPV type so that it can be marshaled to JSON
+	json.RegisterType(types.MockPV{}, "tendermint/MockPV")
+	json.RegisterType(MockProvider{}, "tendermint/MockProvider")
+}
+
 // SINGLE STEP TEST DATA -------->
 
 // TestCase stores all the necessary information for single step test cases
 // to perform verification test on the data given
 type TestCase struct {
-	Description    string      `json:"description"`
-	Initial        Initial     `json:"initial"`
+	Description    string       `json:"description"`
+	Initial        Initial      `json:"initial"`
 	Input          []lightBlock `json:"input"`
-	ExpectedOutput string      `json:"expected_output"`
+	ExpectedOutput string       `json:"expected_output"`
 }
 
 // genJSON produces the JSON for the given testCase type.
@@ -49,7 +54,7 @@ func (tc TestCase) genJSON(file string) {
 		fmt.Printf("error: %v", err)
 	}
 
-	err = ioutil.WriteFile(file, b, 0644)
+	err = os.WriteFile(file, b, 0644)
 	if err != nil {
 		panic(err)
 	}
@@ -78,8 +83,8 @@ type lightBlock struct {
 type Initial struct {
 	SignedHeader     *types.SignedHeader `json:"signed_header"`
 	NextValidatorSet *types.ValidatorSet `json:"next_validator_set"`
-	TrustingPeriod   time.Duration      `json:"trusting_period"`
-	Now              time.Time          `json:"now"`
+	TrustingPeriod   time.Duration       `json:"trusting_period"`
+	Now              time.Time           `json:"now"`
 }
 
 // ValList stores a list of validators and privVals
@@ -114,8 +119,6 @@ func GetValList(file string) ValList {
 	data := ReadFile(file)
 	var valList ValList
 
-	json.RegisterType(types.MockPV{}, "tendermint/MockPV")
-
 	er := json.Unmarshal(data, &valList)
 	if er != nil {
 		fmt.Printf("error: %v", er)
@@ -134,8 +137,6 @@ func GenerateValList(numVals int, votingPower int64) {
 		PrivVals:   types.PrivValidatorsByAddress(newPrivVal),
 	}
 
-	json.RegisterType(types.MockPV{}, "tendermint/MockPV")
-
 	b, err := json.MarshalIndent(valList, " ", "	")
 
 	if err != nil {
@@ -143,7 +144,7 @@ func GenerateValList(numVals int, votingPower int64) {
 	}
 
 	file := "./val_list.json"
-	err = ioutil.WriteFile(file, b, 0644)
+	err = os.WriteFile(file, b, 0644)
 	if err != nil {
 		panic(err)
 	}
@@ -173,21 +174,21 @@ func newAbsentCommitSig(valAddr types.Address) types.CommitSig {
 // BISECTION TEST DATA -------->
 
 type TestBisection struct {
-	Description        string              `json:"description"`
-	TrustOptions       TrustOptions        `json:"trust_options"`
-	Primary            *lightmock.Mock     `json:"primary"`
-	Witnesses          []provider.Provider `json:"witnesses"`
-	HeightToVerify     int64               `json:"height_to_verify"`
-	Now                time.Time           `json:"now"`
-	ExpectedOutput     string              `json:"expected_output"`
-	ExpectedBisections int32               `json:"expected_num_of_bisections"`
+	Description        string          `json:"description"`
+	TrustOptions       TrustOptions    `json:"trust_options"`
+	Primary            *MockProvider   `json:"primary"`
+	Witnesses          []*MockProvider `json:"witnesses"`
+	HeightToVerify     int64           `json:"height_to_verify"`
+	Now                time.Time       `json:"now"`
+	ExpectedOutput     string          `json:"expected_output"`
+	ExpectedBisections int32           `json:"expected_num_of_bisections"`
 }
 
 func (tb TestBisection) make(
 	desc string,
 	trustOpts TrustOptions,
-	primary *lightmock.Mock,
-	witnesses []provider.Provider,
+	primary *MockProvider,
+	witnesses []*MockProvider,
 	heightToVerify int64,
 	now time.Time,
 	expectedOutput string,
@@ -206,14 +207,12 @@ func (tb TestBisection) make(
 }
 
 func (testBisection TestBisection) genJSON(file string) {
-	json.RegisterType(lightmock.Mock{}, "com.tendermint/lightmock.Mock")
-
 	b, err := json.MarshalIndent(testBisection, " ", "	")
 	if err != nil {
 		fmt.Printf("error: %v", err)
 	}
 
-	err = ioutil.WriteFile(file, b, 0644)
+	err = os.WriteFile(file, b, 0644)
 	if err != nil {
 		panic(err)
 	}
@@ -299,4 +298,36 @@ func (vsc ValSetChanges) makeValSetChanges(
 		vsc = append(vsc, v)
 	}
 	return vsc
+}
+
+// MockProvider is a mock provider that can be used in tests.
+type MockProvider struct {
+	// ChainID is the ID of the blockchain this provider is for.
+	ChainIDStr string `json:"chain_id"`
+	// LightBlocks is a list of light blocks that this provider can provide.
+	LightBlocks []lightBlock `json:"lite_blocks"`
+}
+
+// ChainID implements the provider.Provider interface.
+func (mp *MockProvider) ChainID() string {
+	return mp.ChainIDStr
+}
+
+// LightBlock implements the provider.Provider interface.
+func (mp *MockProvider) LightBlock(ctx context.Context, height int64) (*types.LightBlock, error) {
+	if height < 1 || height > int64(len(mp.LightBlocks)) {
+		return nil, fmt.Errorf("height %d out of range (1-%d)", height, len(mp.LightBlocks))
+	}
+
+	lightBlock := mp.LightBlocks[height-1]
+	return &types.LightBlock{
+		SignedHeader: lightBlock.SignedHeader,
+		ValidatorSet: lightBlock.ValidatorSet,
+	}, nil
+}
+
+// ReportEvidence implements the provider.Provider interface.
+func (mp *MockProvider) ReportEvidence(ctx context.Context, ev types.Evidence) error {
+	// do nothing for mock
+	return nil
 }
