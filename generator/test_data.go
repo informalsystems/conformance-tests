@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"time"
 
@@ -51,12 +52,16 @@ type TestCase struct {
 func (tc TestCase) genJSON(file string) {
 	b, err := json.MarshalIndent(tc, " ", "	")
 	if err != nil {
-		fmt.Printf("error: %v", err)
+		panic(fmt.Sprintf("error marshaling testCase: %v", err))
+	}
+
+	if err := os.MkdirAll(filepath.Dir(file), 0755); err != nil {
+		panic(fmt.Sprintf("error creating directory for file %s: %v", file, err))
 	}
 
 	err = os.WriteFile(file, b, 0644)
 	if err != nil {
-		panic(err)
+		panic(fmt.Sprintf("error writing file %s: %v", file, err))
 	}
 }
 
@@ -209,12 +214,16 @@ func (tb TestBisection) make(
 func (testBisection TestBisection) genJSON(file string) {
 	b, err := json.MarshalIndent(testBisection, " ", "	")
 	if err != nil {
-		fmt.Printf("error: %v", err)
+		panic(fmt.Sprintf("error marshaling testBisection: %v", err))
+	}
+
+	if err := os.MkdirAll(filepath.Dir(file), 0755); err != nil {
+		panic(fmt.Sprintf("error creating directory for file %s: %v", file, err))
 	}
 
 	err = os.WriteFile(file, b, 0644)
 	if err != nil {
-		panic(err)
+		panic(fmt.Sprintf("error writing file %s: %v", file, err))
 	}
 }
 
